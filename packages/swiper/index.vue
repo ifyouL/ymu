@@ -78,12 +78,11 @@ export default useName({
       useAnimation: false,
       translate: 0,
       state: {
+        points: [],
         touchStartTime: undefined,
         touchStartScreen: undefined,
-        touchStartOffset: undefined,
         touchMoveTime: undefined,
         touchMoveScreen: undefined,
-        touchMoveOffset: undefined,
         touchEndTime: undefined,
         touchEndScreen: undefined,
         isTouchStarted: false,
@@ -99,13 +98,16 @@ export default useName({
     indicatorCls () {
     },
     isVertical () {
-      return this.direction === 'vertical'
+      return this.direction === 'vertical';
     },
     slideLen () {
-      return this.swipes.length
+      return this.swipes.length;
     },
     isUseLoopMode () {
-      return this.loop && this.swipes.length > 1
+      return this.loop && this.swipes.length > 1;
+    },
+    size () {
+      return this.isVertical ? this.calcHeight : this.calcWidth;
     }
   },
   watch: {
@@ -142,7 +144,6 @@ export default useName({
           this.slideTo(this.currentIndex)
           setTimeout(() => {
             if (this.currentIndex >= this.swipes.length-1) {
-              // if 
             } else {
               this.autoPlay()
             }
@@ -155,12 +156,18 @@ export default useName({
      * 不决定是否使用动画
      */
     updateSlideStl () {
-      this.slideStl = {
-        width: `${this.calcWidth * this.swipes.length}px`,
-        height: `${this.calcHeight}px`,
+      const result = {
         transform: `translate${this.isVertical ? 'Y' : 'X'}(${this.translate}px)`,
         transitionDuration: `${this.useAnimation ? this.duration : 0}ms`,
+        width: `${this.calcWidth}px`,
+        height: `${this.calcHeight}px`
       }
+      if (this.isVertical) {
+        result.height = `${this.calcHeight * this.swipes.length}px`
+      } else {
+        result.width = `${this.calcWidth * this.swipes.length}px`
+      }
+      this.slideStl = result
     },
 
     /**
@@ -200,7 +207,7 @@ export default useName({
           this.currentIndex = index
         }
       }, this.duration)
-      this.translate = -this.calcWidth * index
+      this.translate = -this.size * index
       this.useAnimation = useAnimation
       this.updateSlideStl()
     },
@@ -212,7 +219,7 @@ export default useName({
       const index = this.currentIndex + 1
       if (this.isUseLoopMode) {
         if (index >= this.swipes.length) {
-          this.swipes[0].translate = this.swipes.length * this.calcWidth
+          this.swipes[0].translate = this.swipes.length * this.size
         }
         this.slideTo(index, index <= this.swipes.length)
       } else {
@@ -229,7 +236,7 @@ export default useName({
       const index = this.currentIndex - 1
       if (this.isUseLoopMode) {
         if (index < 0) {
-          this.swipes[this.swipes.length - 1].translate = -this.swipes.length * this.calcWidth
+          this.swipes[this.swipes.length - 1].translate = -this.swipes.length * this.size
         }
         this.slideTo(index)
       }
@@ -239,6 +246,7 @@ export default useName({
       }
     },
 
+    // 获取当前的偏移位置
     getTranslate () {
       return getTranslate(
         this.$refs.slides,
@@ -252,10 +260,11 @@ export default useName({
     _onTouchStart (event) {
       const touch = event.changedTouches[0];
       if (!touch) throw 'error';
-
+      
+      this.state.points = []
+      this.state.points.push(touch)
       this.state.isTouchStarted = true;
       this.state.touchStartTime = now();
-      this.state.touchStartPoint = touch;
       this.state.touchStartTranslate = this.getTranslate();
     },
 
@@ -263,55 +272,59 @@ export default useName({
      * handle toucmove
      */
     _onTouchMove (event) {
+      // 当前点
       const touch = event.changedTouches[0];
       if (!touch) throw 'error';
 
-      const translate = getTranslate(
+      const points = this.state.points
+      
+      // 当前的偏移位置
+      let translate = getTranslate(
         this.$refs.slides,
         this.isVertical ? 'y' : 'x'
       );
+
+      // 上一点到当前点的距离
       let diffX = 0;
       let diffY = 0;
+
+      // 开始点到当前点的距离
       let deltaX = 0;
       let deltaY = 0;
 
-      deltaX = touch.pageX - this.state.touchStartPoint.pageX;
-      deltaY = touch.pageY - this.state.touchStartPoint.pageY;
+      deltaX = touch.pageX - points[0].pageX
+      deltaY = touch.pageY - points[0].pageY
+      diffX = touch.pageX - points[points.length - 1].pageX;
+      diffY = touch.pageY - points[points.length - 1].pageY;
 
-      if (this.isVertical) {
-        if (Math.abs(deltaX) > Math.abs(deltaY)) {
-          return;
-        }
-      } else {
-        if (Math.abs(deltaX) < Math.abs(deltaY)) {
-          return;
-        }
+      if (!this._judgeSwipeDirection(deltaX, deltaY)) {
+        return
       }
-
-      if (this.state.touchMovePoint) {
-        diffX = touch.pageX - this.state.touchMovePoint.pageX;
-        diffY = touch.pageY - this.state.touchMovePoint.pageY;
-      } else {
-        diffX = touch.pageX - this.state.touchStartPoint.pageX;
-        diffY = touch.pageY - this.state.touchStartPoint.pageY;
+      if (this.isVertical && Math.abs(deltaY) > Math.abs(deltaX)) {
+        event.preventDefault()
       }
 
       let diff = this.isVertical ? diffY : diffX;
+      let delta = this.isVertical ? deltaY : deltaX;
 
-      // valid max translate
+      // 新的位置
       let newTranslate = translate + diff;
+
+      // 超出最大偏移范围
       if (newTranslate > 0) {
         if (this.loop && this.swipes.length > 1) {
-          this.swipes[this.swipes.length - 1].translate = -this.swipes.length * this.calcWidth;
+          // 无缝轮播
+          this.swipes[this.swipes.length - 1].translate = -this.swipes.length * this.size;
         } else {
           // 阻尼函数
         }
       }
 
-      // valid min translate
-      if (newTranslate < -(this.slideLen - 1) * this.calcWidth) {
+      // 超出最小偏移范围
+      if (newTranslate < -(this.slideLen - 1) * this.size) {
         if (this.loop && this.swipes.length > 1) {
-          this.swipes[0].translate = this.swipes.length * this.calcWidth;
+          // 无缝轮播
+          this.swipes[0].translate = this.swipes.length * this.size;
         } else {
           // 阻尼函数
         }
@@ -322,49 +335,53 @@ export default useName({
       this.useAnimation = false;
       this.state.isTouchMoved = true;
       this.state.touchMovePoint = touch;
+      this.state.delta = delta
+      this.state.diff = diff
       this.state.diffX = diffX;
       this.state.diffY = diffY;
       this.state.deltaX = deltaX;
       this.state.deltaY = deltaY;
+      this.state.points.push(touch)
 
-      if (this.isVertical) {
-        this.state.diff = touch.pageY - this.state.touchStartPoint.pageY;
-      } else {
-        this.state.diff = touch.pageX - this.state.touchStartPoint.pageX;
-      }
-
-      // 滑动角度的判断
-      if (Math.abs(diffY) > Math.abs(diffX)) return;
+      // 更新偏移
       this.updateSlideStl()
+    },
+
+    // 判断滑动方向是否正确
+    _judgeSwipeDirection (deltaX, deltaY) {
+      if (this.isVertical && (Math.abs(deltaX) > Math.abs(deltaY))) {
+        // 垂直轮播 角度小于45
+        return false;
+      } else if (!this.isVertical && Math.abs(deltaX) < Math.abs(deltaY)) {
+        // 水平轮播 角度小于45
+        return false;
+      }
+      return true;
     },
 
     /**
      * handle toucend
      */
     _onTouchEnd (event) {
-      if (
-        this.state.deltaX === undefined ||
-        this.state.deltaY === undefined) {
-          return;
+      const state = this.state
+
+      // 未发生过touchmove
+      if (state.delta === undefined || state.diff === undefined) {
+        return;
       }
-      if (this.isVertical) {
-        if (Math.abs(this.state.deltaX) > Math.abs(this.state.deltaY)) {
-          return;
-        }
-      } else {
-        if (Math.abs(this.state.deltaX) < Math.abs(this.state.deltaY)) {
-          return;
-        }
+
+      // 判断滑动方向
+      if (!this._judgeSwipeDirection(state.deltaX, state.deltaY)) {
+        return
       }
-      let size = this.isVertical ? this.calcHeight : this.calcWidth
+
       // 按下到释放之间的时间
       let diffTime = now() - this.state.touchStartTime
+
       // 计算当前位置
-      let index = Math.round(-this.translate / size)
+      let index = Math.round(-this.translate / this.size)
       if (index === this.currentIndex) {
-        // 滑动一定距离但是activeIndex未发生改变
         if (diffTime < this.longTouch) {
-          // 快速滑动
           if (this.state.diff < 0) {
             index++
           } else {
@@ -372,15 +389,14 @@ export default useName({
           }
         }
       }
-      this.slideTo(index)
-      this.state.touchStartTime = undefined
-      this.state.touchStartPoint = undefined
-      this.state.touchMovePoint = undefined
+
       this.state.isTouchStarted = false
       this.state.isTouchMoved = false
-      this.state.diff = 0
+      this.state.diff = undefined
       this.state.deltaX = undefined
       this.state.deltaY = undefined
+      this.state.points = []
+      this.slideTo(index)
     }
   }
 })

@@ -22,11 +22,16 @@ export default useName({
       return this.$parent.calcHeight
     },
     slideStl () {
-      return {
+      const result = {
         width: `${this.width}px`,
-        height: `${this.height}px`,
-        transform: `translateX(${this.translate}px)`
+        height: `${this.height}px`
       }
+      if (this.$parent.isVertical) {
+        result.transform = `translateY(${this.translate}px)`
+      } else {
+        result.transform = `translateX(${this.translate}px)`
+      }
+      return result
     }
   },
   beforeCreate () {
