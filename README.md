@@ -2,6 +2,10 @@
 
 mobile components based on vue.js
 
+扫描二维码，立即体验：
+
+![Alt 二维码](http://c1.airtlab.com/ymuqr.png)
+
 ## Installation
 
 ```shell
